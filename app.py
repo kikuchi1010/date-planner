@@ -10,7 +10,7 @@ st.set_page_config(page_title="デートプラン自動生成", page_icon="💑"
 
 # ================= Helpers =================
 API_SESSION_KEY = "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"
-MODEL_DEFAULT = "gpt-5"  # 要件に合わせ既定は gpt-5
+MODEL_DEFAULT = "gpt-5"  # 既定モデル
 
 def init_states():
     st.session_state.setdefault("system_prompt", DEFAULT_SYSTEM)
@@ -76,7 +76,6 @@ DEFAULT_SYSTEM = """あなたは日本のデートプラン専門プランナー
 予算や移動制約に90%以上の案が収まるよう調整。重複施設名は避ける。"""
 
 def build_user_prompt(values: dict) -> str:
-    # Userメッセージ（条件の羅列＋「itemsで返す」ルール）
     lines = ["条件:"]
     lines.append(f"- デート種別: {values['date_type']}")
     b = values["budget"]
@@ -102,11 +101,6 @@ def build_user_prompt(values: dict) -> str:
     return "\n".join(lines)
 
 def parse_plans(text: str) -> List[Dict[str, Any]]:
-    """
-    1) JSONオブジェクト {"items":[...]} を最優先
-    2) そうでなければ配列だけのJSONを想定
-    3) それも駄目なら空配列
-    """
     try:
         data = json.loads(text)
         if isinstance(data, dict) and "items" in data and isinstance(data["items"], list):
@@ -115,8 +109,6 @@ def parse_plans(text: str) -> List[Dict[str, Any]]:
             return data
         return []
     except Exception:
-        # モデルが説明を混ぜた時の簡易フォールバック（[]〜]を抜き出す等）を省略し、
-        # 明確にエラー表示させる方針でも良い。必要ならここで正規表現抽出を追加。
         return []
 
 # ================ App Main ================
@@ -143,7 +135,7 @@ with st.form("inputs"):
 
     c6, c7 = st.columns(2)
     travel_type = c6.selectbox("移動制約の種類*", ["時間（分）","距離（km）"], index=0)
-    travel_value = c7.number_input("移動上限値*", min_value=0, value=(30 if not sample else 30), step=5)
+    travel_value = c7.number_input("移動上限値*", min_value=1, value=(30 if not sample else 30), step=5)
 
     c8, c9 = st.columns(2)
     age_self = c8.text_input("あなたの年齢（任意）", value=("33" if sample else ""), placeholder="例：33")
@@ -157,9 +149,8 @@ with st.form("inputs"):
     st.divider()
     with st.expander("上級者設定（モデル/プロンプト編集・JSONモード）", expanded=False):
         model = st.selectbox("モデル", [MODEL_DEFAULT,"gpt-5-mini","gpt-5-chat-latest"], index=0)
-        # セッションに直結する text_area
         st.text_area("System Prompt（編集可）", key="system_prompt", height=240)
-        colx, coly, colz = st.columns([1,1,1])
+        colx, coly, _ = st.columns([1,1,1])
         use_json_mode = colx.checkbox("厳格JSONモードを使う（推奨）", value=st.session_state["use_json_mode"])
         if coly.button("初期Systemに戻す"):
             st.session_state["system_prompt"] = DEFAULT_SYSTEM
@@ -169,7 +160,7 @@ with st.form("inputs"):
         user_prefix = st.text_area("User Promptプレフィクス（任意）", value="", height=60)
         user_suffix = st.text_area("User Promptサフィクス（任意）", value="", height=60)
 
-    submitted = st.form_submit_button("🎯 生成開始")  # ← 常時表示に変更
+    submitted = st.form_submit_button("🎯 生成開始")  # 常時表示
 
 # ================ Run ================
 if submitted:
@@ -237,19 +228,15 @@ if submitted:
                     temperature=0.6
                 )
                 text = resp.choices[0].message.content.strip()
-        except Exception as e:
-            # JSONモード非対応モデル等のエラー時は通常モードへ再試行
-            try:
-                resp = client.chat.completions.create(
-                    model=model,
-                    messages=messages,
-                    temperature=0.6
-                )
-                text = resp.choices[0].message.content.strip()
-                st.warning("JSONモードでの生成に失敗したため通常モードで再実行しました。")
-            except Exception as e2:
-                st.exception(e2)
-                st.stop()
+        except Exception:
+            # JSONモード非対応等 → 通常モードで再試行
+            resp = client.chat.completions.create(
+                model=model,
+                messages=messages,
+                temperature=0.6
+            )
+            text = resp.choices[0].message.content.strip()
+            st.warning("JSONモードでの生成に失敗したため通常モードで再実行しました。")
 
     # 5) パース & URL補完
     plans = parse_plans(text)
@@ -258,7 +245,6 @@ if submitted:
         st.code(text)
         st.stop()
 
-    # URL補完（無い場合はマップ検索URL）
     for p in plans:
         if not p.get("url"):
             name = p.get("theme","デート")
