@@ -1,4 +1,5 @@
-# app.py — Date Planner (MVP) using Streamlit + OpenAI
+# Write the updated app.py to a downloadable file and show a link
+app_py = r'''# app.py — Date Planner (MVP) using Streamlit + OpenAI
 # ----------------------------------------------------
 # 概要:
 #   ・2人の基本情報 + 条件を入力 → OpenAIでカテゴリ別20案のデートプランを生成
@@ -12,10 +13,9 @@
 #
 # 注意:
 #   ・MVPでは正式な営業時間/経路/料金の正確性は保証しません。必ずリンク先で最新情報をご確認ください。
-#   ・Google Places/Directions API連携や厳密な移動時間は将来拡張で対応可能です。
+#   ・Google Places/Directions API連携や厳密な移動時間は将来拡張で対応可能です.
 
 import json
-import math
 import textwrap
 from typing import Any, Dict, List
 
@@ -40,8 +40,7 @@ def quote_plus(s: str) -> str:
 
 
 def google_maps_search_url(name: str, area: str = "") -> str:
-    """施設名 + エリアから Google マップ検索URLを生成。必ずURLを返すフォールバック。
-    """
+    """施設名 + エリアから Google マップ検索URLを生成。必ずURLを返すフォールバック。"""
     query = name.strip()
     if area.strip():
         query = f"{query} {area.strip()}"
@@ -92,23 +91,23 @@ def build_prompt(user_input: Dict[str, Any]) -> str:
 
         ◆ 出力フォーマット(JSON 配列; 要素=各プラン)
         [
-          {
+          {{
             "category": "アート|アクティビティ|食|自然|癒し|季節|イベント|夜景|散歩|学び など",
             "theme": "秋の夜長×美術館→夜カフェ",
             "summary": "プランの要約(120文字以内)",
             "itinerary": [
-              {"time": "17:30", "activity": "上野の森美術館"},
-              {"time": "19:30", "activity": "不忍池散歩"},
-              {"time": "20:15", "activity": "上野 夜カフェ"}
+              {{"time": "17:30", "activity": "上野の森美術館"}},
+              {{"time": "19:30", "activity": "不忍池散歩"}},
+              {{"time": "20:15", "activity": "上野 夜カフェ"}}
             ],
             "duration_min": 210,
             "move_overview": "電車合計40分程度",
-            "cost_yen": {"pair": 12000, "breakdown": "入館料×2+カフェ×2"},
-            "place_name": "上野の森美術館",  
-            "url": "https://example.com" ,  
+            "cost_yen": {{"pair": 12000, "breakdown": "入館料×2+カフェ×2"}},
+            "place_name": "上野の森美術館",
+            "url": "https://example.com",
             "alt_weather": "屋内中心/雨天でも実施可",
             "why_match": "静かめ志向・アート好きに合致"
-          }
+          }}
         ]
 
         ◆ スタイル
@@ -138,7 +137,7 @@ def build_prompt(user_input: Dict[str, Any]) -> str:
     return prompt
 
 
-def call_openai(prompt: str, model_name: str = "gpt-4o") -> List[Dict[str, Any]]:
+def call_openai(prompt: str, model_name: str = "gpt-5") -> List[Dict[str, Any]]:
     """OpenAI API を呼び出し JSON配列を受け取る。"""
     api_key = st.secrets.get("OPENAI_API_KEY") or st.session_state.get("OPENAI_API_KEY")
     if not api_key:
@@ -160,9 +159,8 @@ def call_openai(prompt: str, model_name: str = "gpt-4o") -> List[Dict[str, Any]]
         except Exception as e:
             st.warning(f"Responses API 呼び出しに失敗しました: {e}\nChat Completions にフォールバックします。")
             try:
-                # chat.completions フォールバック
+                # chat.completions フォールバック (古いSDK想定)
                 from openai import ChatCompletion
-                # 古いSDKの場合の仮想呼び出し — 実環境に合わせて修正してください
                 cc = ChatCompletion()
                 r = cc.create(
                     model=model_name,
@@ -216,6 +214,10 @@ def call_openai(prompt: str, model_name: str = "gpt-4o") -> List[Dict[str, Any]]
 
 
 def normalize_items(items: List[Dict[str, Any]], area_hint: str) -> List[Dict[str, Any]]:
+    def _cost_pair(it: Dict[str, Any]) -> int:
+        c = it.get("cost_yen") or {}
+        return safe_int(c.get("pair", 0), 0)
+
     normed = []
     for it in items:
         item = dict(it)
@@ -223,8 +225,7 @@ def normalize_items(items: List[Dict[str, Any]], area_hint: str) -> List[Dict[st
         item["final_url"] = coalesce_url(item, area_hint)
         # 型の安全化
         item["duration_min"] = safe_int(item.get("duration_min"), 0)
-        cost_pair = item.get("cost_yen", {}).get("pair", 0)
-        item["cost_pair"] = safe_int(cost_pair, 0)
+        item["cost_pair"] = _cost_pair(item)
         item["category"] = (item.get("category") or "その他").strip()
         item["theme"] = (item.get("theme") or "プラン").strip()
         item["summary"] = (item.get("summary") or "").strip()
@@ -245,8 +246,7 @@ def group_by_category(items: List[Dict[str, Any]]):
 st.set_page_config(page_title="Date Planner (MVP)", page_icon="💑", layout="wide")
 
 st.title("💑 デートプラン自動生成 (MVP)")
-st.caption("Python + Streamlit + OpenAI — 条件に合わせてカテゴリ別20案を提案します。
-検索(公式URL候補の推定など)を伴う生成は gpt-5 を既定で使用します。")
+st.caption("Python + Streamlit + OpenAI — 条件に合わせてカテゴリ別20案を提案します。\n検索(公式URL候補の推定など)を伴う生成は gpt-5 を既定で使用します。")
 
 with st.expander("Settings / API", expanded=False):
     default_model = st.session_state.get("OPENAI_MODEL", "gpt-5")
@@ -328,8 +328,8 @@ if btn:
     with st.spinner("AIがプランを作成中…"):
         prompt = build_prompt(user_input)
         # モデル選択: 検索を伴う生成は gpt-5 を優先
-_model = "gpt-5" if search_boost else (model_name or "gpt-5")
-items_raw = call_openai(prompt, model_name=_model)
+        _model = "gpt-5" if search_boost else (st.session_state.get("OPENAI_MODEL") or "gpt-5")
+        items_raw = call_openai(prompt, model_name=_model)
 
     if not items_raw:
         st.stop()
@@ -363,7 +363,7 @@ items_raw = call_openai(prompt, model_name=_model)
 
     df_view = df.copy()
     if view_only_under_budget:
-        max_budget = int(budget_max) if user_input["budget"]["unit"] == "pair" else int(budget_max) * 2
+        max_budget = int(user_input["budget"]["max"]) if user_input["budget"]["unit"] == "pair" else int(user_input["budget"]["max"]) * 2
         df_view = df_view[df_view["費用(2人)"].apply(lambda x: safe_int(x, 0) <= max_budget)]
 
     if sort_by == "費用(2人)":
@@ -401,7 +401,7 @@ with st.expander("ヘルプ / 既知の制約", expanded=False):
         **既知の制約 (MVP)**
         - 公式URLの有無はモデル依存です。無い場合は施設名からGoogleマップ検索URLを自動生成します。
         - 移動時間は概算です。正確な経路/所要はリンク先でご確認ください。
-        - Google Places/Directions API と連携すれば、営業時間・クチコミ・所要の精度を高められます。
+        - Google Places/Directions API と連携すれば、営業時間・クチコミ・所要の精度を高められます.
 
         **ロードマップ**
         - 並び替えとフィルタの強化(屋内/屋外、雨OK、深夜対応)
@@ -410,3 +410,8 @@ with st.expander("ヘルプ / 既知の制約", expanded=False):
         - レコメンド学習(ユーザーの選好反映)
         """
     )
+'''
+with open('/mnt/data/app.py', 'w', encoding='utf-8') as f:
+    f.write(app_py)
+
+'/mnt/data/app.py'
