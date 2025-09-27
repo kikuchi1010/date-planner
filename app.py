@@ -116,32 +116,25 @@ init_states()
 st.title("💑 デートプラン自動生成（GPT-5）")
 api_key = get_api_key_from_ui()
 
-with st.expander("🧪 テスト入力（任意）", expanded=False):
-    if st.button("サンプル値を入れる"):
-        st.session_state["sample_fill"] = True
-        st.experimental_rerun()
-
-sample = st.session_state.get("sample_fill", False)
-
 with st.form("inputs"):
     c1, c2, c3 = st.columns(3)
-    date_type = c1.selectbox("デート種別*", ["昼だけ","夜だけ","半日","1日","旅行"], index=1 if not sample else 1)
-    origin = c2.text_input("出発地点（駅/エリア）*", value=("錦糸町" if sample else ""), placeholder="例：錦糸町 / 渋谷 / 横浜")
+    date_type = c1.selectbox("デート種別*", ["昼だけ","夜だけ","半日","1日","旅行"], index=1)
+    origin = c2.text_input("出発地点（駅/エリア）*", placeholder="例：錦糸町 / 渋谷 / 横浜")
     budget_unit = c3.selectbox("予算単位*", ["2人合計","1人あたり"], index=0)
 
     c4, c5 = st.columns(2)
-    budget_min = c4.number_input("予算最小*", min_value=0, value=(8000 if not sample else 8000), step=500)
-    budget_max = c5.number_input("予算最大*", min_value=0, value=(15000 if not sample else 15000), step=500)
+    budget_min = c4.number_input("予算最小*", min_value=0, value=8000, step=500)
+    budget_max = c5.number_input("予算最大*", min_value=0, value=15000, step=500)
 
     c6, c7 = st.columns(2)
     travel_type = c6.selectbox("移動制約の種類*", ["時間（分）","距離（km）"], index=0)
-    travel_value = c7.number_input("移動上限値*", min_value=1, value=(30 if not sample else 30), step=5)
+    travel_value = c7.number_input("移動上限値*", min_value=1, value=30, step=5)
 
     c8, c9 = st.columns(2)
-    age_self = c8.text_input("あなたの年齢（任意）", value=("33" if sample else ""), placeholder="例：33")
-    age_partner = c9.text_input("相手の年齢（任意）", value=("37" if sample else ""), placeholder="例：37")
+    age_self = c8.text_input("あなたの年齢（任意）", placeholder="例：33")
+    age_partner = c9.text_input("相手の年齢（任意）", placeholder="例：37")
 
-    interests = st.text_input("趣味・興味（任意）", value=("美術館, カフェ, 静かな場所" if sample else ""), placeholder="例：美術館, カフェ, 静かな場所")
+    interests = st.text_input("趣味・興味（任意）", placeholder="例：美術館, カフェ, 静かな場所")
     dietary = st.text_input("嗜好/NG（任意）", placeholder="例：辛いNG, アルコールOK")
     date_pref = st.text_input("日付（任意）", placeholder="例：2025-10-05")
     weather_alt = st.checkbox("雨天代替も欲しい", value=True)
