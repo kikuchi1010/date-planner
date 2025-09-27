@@ -245,15 +245,17 @@ def group_by_category(items: List[Dict[str, Any]]):
 st.set_page_config(page_title="Date Planner (MVP)", page_icon="💑", layout="wide")
 
 st.title("💑 デートプラン自動生成 (MVP)")
-st.caption("Python + Streamlit + OpenAI — 条件に合わせてカテゴリ別20案を提案します。")
+st.caption("Python + Streamlit + OpenAI — 条件に合わせてカテゴリ別20案を提案します。
+検索(公式URL候補の推定など)を伴う生成は gpt-5 を既定で使用します。")
 
 with st.expander("Settings / API", expanded=False):
-    default_model = st.session_state.get("OPENAI_MODEL", "gpt-4o")
-    model_name = st.text_input("OpenAI Model", value=default_model, help="例: gpt-4o / gpt-4.1 / gpt-5 (利用可の場合)")
+    default_model = st.session_state.get("OPENAI_MODEL", "gpt-5")
+    model_name = st.text_input("OpenAI Model", value=default_model, help="例: gpt-5 / gpt-4.1 / gpt-4o (環境により選択可)")
     st.session_state["OPENAI_MODEL"] = model_name
     api_key_input = st.text_input("OPENAI_API_KEY (任意; Secrets未設定の場合のみ)", type="password")
     if api_key_input:
         st.session_state["OPENAI_API_KEY"] = api_key_input
+    st.markdown(":information_source: **検索を用いる場合は gpt-5 を使用**します。モデル欄で別モデルを指定している場合でも、下のブースト設定が有効なら gpt-5 に切替わります。")
 
 st.subheader("1) 基本情報")
 col_a, col_b, col_c = st.columns([1.2, 1.2, 1])
@@ -286,6 +288,9 @@ st.info(
     "入力のヒント：年齢や関係性(初回/記念日/リラックス重視など)も自由欄に書くと、提案の精度が上がります。\n"
     "URLは公式サイトが優先、無い場合はGoogleマップ検索URLが自動で追加されます。"
 )
+
+# 検索品質ブースト (gpt-5強制)
+search_boost = st.checkbox("検索品質ブースト (公式URL優先・gpt-5使用)", value=True, help="オンの場合、モデル指定に関わらず gpt-5 を使用します。")
 
 # 生成ボタン
 btn = st.button("🚀 生成開始", use_container_width=True)
@@ -322,7 +327,9 @@ if btn:
 
     with st.spinner("AIがプランを作成中…"):
         prompt = build_prompt(user_input)
-        items_raw = call_openai(prompt, model_name=model_name or "gpt-4o")
+        # モデル選択: 検索を伴う生成は gpt-5 を優先
+_model = "gpt-5" if search_boost else (model_name or "gpt-5")
+items_raw = call_openai(prompt, model_name=_model)
 
     if not items_raw:
         st.stop()
