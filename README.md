@@ -1,6 +1,6 @@
 # Date Planner (Streamlit + GPT-5)
 
-## Run locally
-1. Create .streamlit/secrets.toml and put your OPENAI_API_KEY.
-2. `pip install -r requirements.txt`
-3. `streamlit run app.py`
+Web only deploy (no local, no git CLI).
+1. Upload `app.py` and `requirements.txt` to GitHub.
+2. Deploy on Streamlit Community Cloud → choose `app.py`.
+3. Enter your OpenAI API key in the app sidebar (session only).
