@@ -9,8 +9,27 @@ from openai import OpenAI
 st.set_page_config(page_title="デートプラン自動生成", page_icon="💑", layout="wide")
 
 # ================= Helpers =================
-API_SESSION_KEY = "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"
+API_SESSION_KEY = "api_key"
 MODEL_DEFAULT = "gpt-5"  # 既定モデル
+
+DEFAULT_SYSTEM = """あなたは日本のデートプラン専門プランナー。入力条件（予算、移動上限、日程、嗜好/NG、デート種別）を厳守し、カテゴリが重複し過ぎないように多様性ある20案を生成すること。各案は必ずURLを1つ以上含める。公式URLが不明なら Google マップ検索URL を作る。
+出力は JSON オブジェクトで、必ず次の形式にすること（解説文は出力しない）:
+{
+  "items": [
+    {
+      "category": "アート|自然|食|体験|季節|癒し|夜景|屋内|屋外|旅行",
+      "theme": "短いタイトル",
+      "detail": "どんな体験かの要約（200字以内）",
+      "itinerary": "時刻付きの簡易タイムライン（例：17:30 美術館→19:30 夜カフェ）",
+      "duration_min": 180,
+      "move_overview": "移動手段と概算所要（例：電車計40分）",
+      "cost_pair_yen": 12000,
+      "url": "https://..."
+    }
+    // ← 要素は必ず20件
+  ]
+}
+予算や移動制約に90%以上の案が収まるよう調整。重複施設名は避ける。"""
 
 def init_states():
     st.session_state.setdefault("system_prompt", DEFAULT_SYSTEM)
@@ -56,25 +75,6 @@ def plans_to_dataframe(plans: List[Dict]) -> pd.DataFrame:
         })
     return pd.DataFrame(rows)
 
-DEFAULT_SYSTEM = """あなたは日本のデートプラン専門プランナー。入力条件（予算、移動上限、日程、嗜好/NG、デート種別）を厳守し、カテゴリが重複し過ぎないように多様性ある20案を生成すること。各案は必ずURLを1つ以上含める。公式URLが不明なら Google マップ検索URL を作る。
-出力は JSON オブジェクトで、必ず次の形式にすること（解説文は出力しない）:
-{
-  "items": [
-    {
-      "category": "アート|自然|食|体験|季節|癒し|夜景|屋内|屋外|旅行",
-      "theme": "短いタイトル",
-      "detail": "どんな体験かの要約（200字以内）",
-      "itinerary": "時刻付きの簡易タイムライン（例：17:30 美術館→19:30 夜カフェ）",
-      "duration_min": 180,
-      "move_overview": "移動手段と概算所要（例：電車計40分）",
-      "cost_pair_yen": 12000,
-      "url": "https://..."
-    }
-    // ← 要素は必ず20件
-  ]
-}
-予算や移動制約に90%以上の案が収まるよう調整。重複施設名は避ける。"""
-
 def build_user_prompt(values: dict) -> str:
     lines = ["条件:"]
     lines.append(f"- デート種別: {values['date_type']}")
@@ -101,6 +101,7 @@ def build_user_prompt(values: dict) -> str:
     return "\n".join(lines)
 
 def parse_plans(text: str) -> List[Dict[str, Any]]:
+    """JSONオブジェクト {items:[...]} を最優先。配列だけでも受け入れ。"""
     try:
         data = json.loads(text)
         if isinstance(data, dict) and "items" in data and isinstance(data["items"], list):
@@ -117,6 +118,7 @@ st.title("💑 デートプラン自動生成（GPT-5）")
 api_key = get_api_key_from_ui()
 
 with st.form("inputs"):
+    # ---- 入力UI（必ずこのフォーム内に置く）----
     c1, c2, c3 = st.columns(3)
     date_type = c1.selectbox("デート種別*", ["昼だけ","夜だけ","半日","1日","旅行"], index=1)
     origin = c2.text_input("出発地点（駅/エリア）*", placeholder="例：錦糸町 / 渋谷 / 横浜")
@@ -141,9 +143,9 @@ with st.form("inputs"):
 
     st.divider()
     with st.expander("上級者設定（モデル/プロンプト編集・JSONモード）", expanded=False):
-        model = st.selectbox("モデル", [MODEL_DEFAULT,"gpt-5-mini","gpt-5-chat-latest"], index=0)
+        model = st.selectbox("モデル", [MODEL_DEFAULT, "gpt-5-mini", "gpt-5-chat-latest"], index=0)
         st.text_area("System Prompt（編集可）", key="system_prompt", height=240)
-        colx, coly, _ = st.columns([1,1,1])
+        colx, coly, _ = st.columns([1, 1, 1])
         use_json_mode = colx.checkbox("厳格JSONモードを使う（推奨）", value=st.session_state["use_json_mode"])
         if coly.button("初期Systemに戻す"):
             st.session_state["system_prompt"] = DEFAULT_SYSTEM
@@ -153,7 +155,8 @@ with st.form("inputs"):
         user_prefix = st.text_area("User Promptプレフィクス（任意）", value="", height=60)
         user_suffix = st.text_area("User Promptサフィクス（任意）", value="", height=60)
 
-    submitted = st.form_submit_button("🎯 生成開始")  # 常時表示
+    # ✅ フォームの送信ボタン（必須：フォーム内の末尾に置く）
+    submitted = st.form_submit_button("🎯 生成開始")
 
 # ================ Run ================
 if submitted:
@@ -172,19 +175,20 @@ if submitted:
     if int(travel_value) <= 0:
         errors.append("移動上限値は1以上を指定してください。")
     if errors:
-        for e in errors: st.error(e)
+        for e in errors:
+            st.error(e)
         st.stop()
 
     # 3) 値を組み立て
     values = {
-        "date_type": {"昼だけ":"day","夜だけ":"night","半日":"half","1日":"full","旅行":"trip"}[date_type],
+        "date_type": {"昼だけ": "day", "夜だけ": "night", "半日": "half", "1日": "full", "旅行": "trip"}[date_type],
         "budget": {
-            "unit": "pair" if budget_unit=="2人合計" else "per_person",
+            "unit": "pair" if budget_unit == "2人合計" else "per_person",
             "min": int(budget_min), "max": int(budget_max)
         },
         "origin": origin.strip(),
         "travel_limit": {
-            "type": "time" if travel_type=="時間（分）" else "distance",
+            "type": "time" if travel_type == "時間（分）" else "distance",
             "value": int(travel_value)
         },
         "ages": {"self": age_self.strip(), "partner": age_partner.strip()},
@@ -194,8 +198,10 @@ if submitted:
         "weather_alt": weather_alt
     }
     user_msg = build_user_prompt(values)
-    if user_prefix: user_msg = user_prefix.strip() + "\n\n" + user_msg
-    if user_suffix: user_msg = user_msg + "\n\n" + user_suffix.strip()
+    if user_prefix:
+        user_msg = user_prefix.strip() + "\n\n" + user_msg
+    if user_suffix:
+        user_msg = user_msg + "\n\n" + user_suffix.strip()
 
     # 4) 呼び出し（JSONモード優先→失敗時フォールバック）
     messages = [
@@ -206,7 +212,7 @@ if submitted:
     text = ""
     with st.spinner("GPT-5が20案を生成中…"):
         try:
-            if use_json_mode:
+            if st.session_state["use_json_mode"]:
                 resp = client.chat.completions.create(
                     model=model,
                     messages=messages,
@@ -240,7 +246,7 @@ if submitted:
 
     for p in plans:
         if not p.get("url"):
-            name = p.get("theme","デート")
+            name = p.get("theme", "デート")
             p["url"] = maps_search_url(name, origin)
 
     df = plans_to_dataframe(plans)
@@ -251,5 +257,7 @@ if submitted:
     cdl1, cdl2 = st.columns(2)
     csv_bytes = df.to_csv(index=False).encode("utf-8")
     cdl1.download_button("⬇️ CSVをダウンロード", data=csv_bytes, file_name="date_plans.csv", mime="text/csv")
-    cdl2.download_button("⬇️ JSONをダウンロード", data=json.dumps(plans, ensure_ascii=False, indent=2),
-                         file_name="date_plans.json", mime="application/json")
+    cdl2.download_button("⬇️ JSONをダウンロード",
+                         data=json.dumps(plans, ensure_ascii=False, indent=2),
+                         file_name="date_plans.json",
+                         mime="application/json")
